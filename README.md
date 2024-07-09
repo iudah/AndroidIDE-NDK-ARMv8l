@@ -1,0 +1,1 @@
+# AndroidIDE-NDK-ARMv8l
