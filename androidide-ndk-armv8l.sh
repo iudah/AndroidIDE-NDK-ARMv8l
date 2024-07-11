@@ -35,7 +35,7 @@ extract_ndk(){
   if [ ! -d $sdk_root ] || [ ! -d $ndk_root ]
   then
     echo $ndk_root not found
-    mkdir -p $ndkroot
+    mkdir -p $ndk_root
   fi
 
   if [ -d $r26b_dir ]
