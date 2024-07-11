@@ -4,7 +4,8 @@ fpath=$1
 arch=$(uname -m)
 _arch_=arm
 downloaded=
-ndk_root=${HOME}/android-sdk/ndk
+sdk_root=${HOME}/android-sdk
+ndk_root=$sdk_root/ndk
 r26b_dir=$ndk_root/26.1.10909125
 llvm_dir=$r26b_dir/toolchains/llvm/prebuilt
 x86_llvm=$llvm_dir/linux-x86_64
@@ -25,13 +26,13 @@ EOF
 download_ndk() {
   pkg update
   pkg upgrade -y
-  pkg install wget
+  pkg install wget -y
   echo "Downloading ndk"
   wget -q -O $1 https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/android-ndk-r26b-aarch64.zip
 }
 
 extract_ndk(){
-  if [ ! -d $ndk_root ]
+  if [ ! -d $sdk_root ] || [ ! -d $ndk_root ]
   then
     echo $ndk_root not found
     mkdir -p $ndkroot
@@ -43,6 +44,8 @@ extract_ndk(){
     echo "Removing $r26b_dir"
     rm -rf $r26b_dir
   fi
+
+  pkg install unzip -y
 
   echo "Unzipping '$1' to '$ndk_root'"
   unzip -qq $1 -d $ndk_root
@@ -106,6 +109,7 @@ copy_rt_lib(){
 
 install_ndk(){
   extract_ndk $@
+  pkg install clang -y
   patch_pkg clang
   patch_pkg clang++ clang
   patch_pkg ld.lld lld
@@ -128,6 +132,6 @@ else
   if [ "$downloaded" = "true" ]
   then
     echo "Removing $fpath"
-    rm fpath
+    rm $fpath
   fi
 fi
