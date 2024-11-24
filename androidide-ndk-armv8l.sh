@@ -12,14 +12,16 @@ x86_llvm=$llvm_dir/linux-x86_64
 arch_llvm=$llvm_dir/linux-$_arch_
 x86_dir=$r26b_dir/prebuilt/linux-x86_64
 arch_dir=$r26b_dir/prebuilt/linux-$_arch_
+clang_ver=17
+downloaded_c_ver=17
 
 help() {
-  cat << EOF
+  cat <<EOF
 Usage: 
 android-ndk-arm-setup.sh path/to/ndk.zip	Install ndk from path/to/ndk.zip
 android-ndk-arm-setup.sh -h  			Display this help
-android-ndk-arm-setup.sh 			Display this help
-android-ndk-arm-setup.sh -d			Download and install ndk
+android-ndk-arm-setup.sh    			Display this help
+android-ndk-arm-setup.sh -d		  	Download and install ndk
 EOF
 }
 
@@ -31,15 +33,13 @@ download_ndk() {
   wget -q -O $1 https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/android-ndk-r26b-aarch64.zip
 }
 
-extract_ndk(){
-  if [ ! -d $sdk_root ] || [ ! -d $ndk_root ]
-  then
+extract_ndk() {
+  if [ ! -d $sdk_root ] || [ ! -d $ndk_root ]; then
     echo $ndk_root not found
     mkdir -p $ndk_root
   fi
 
-  if [ -d $r26b_dir ]
-  then
+  if [ -d $r26b_dir ]; then
     echo "Found $r26b_dir"
     echo "Removing $r26b_dir"
     rm -rf $r26b_dir
@@ -58,30 +58,25 @@ extract_ndk(){
   ln -s $x86_dir $arch_dir
 }
 
-patch_pkg(){
+patch_pkg() {
   pkg_dir=$arch_llvm/bin/$1
   pkg_dep=$2
-  if [ -z $pkg_dep ]
-  then
+  if [ -z $pkg_dep ]; then
     pkg_dep=$1
   fi
 
   rm $pkg_dir
-  echo "#!/bin/sh" > $pkg_dir
-  echo "$pkg_dep \$@"   >> $pkg_dir
+  echo "#!/bin/sh" >$pkg_dir
+  echo "$pkg_dep \$@" >>$pkg_dir
   chmod a+rx $pkg_dir
 }
 
-
-copy_libraries(){
+copy_libraries() {
   echo Copying static libraries
-  for arch_src_dir in aarch64    arm    i386    riscv64    x86_64
-  do
-    for arch_dst_dir in aarch64-linux-android    arm-linux-androideabi    i686-linux-android    riscv64-linux-android    x86_64-linux-android
-    do
-      if [[ "$arch_dst_dir" == $arch_src_dir* ]] ||  [[ "$arch_src_dir" == "i"*"86"* &&  "$arch_dst_dir" == "i"*"86"* ]]
-      then
-        #echo "    ... from .../linux-aarch64/lib/clang/17/lib/linux/$arch_src_dir/  to  .../linux-arm/sysroot/usr/lib/$arch_dst_dir"
+  for arch_src_dir in aarch64 arm i386 riscv64 x86_64; do
+    for arch_dst_dir in aarch64-linux-android arm-linux-androideabi i686-linux-android riscv64-linux-android x86_64-linux-android; do
+      if [[ "$arch_dst_dir" == $arch_src_dir* ]] || [[ "$arch_src_dir" == "i"*"86"* && "$arch_dst_dir" == "i"*"86"* ]]; then
+        #echo "    ... from .../linux-aarch64/lib/clang/$clang_ver/lib/linux/$arch_src_dir/  to  .../linux-arm/sysroot/usr/lib/$arch_dst_dir"
         #for src_lib in $arch_llvm/lib/clang/17/lib/linux/$arch_src_dir/*
         #do
         #  echo " from $src_lib"
@@ -89,9 +84,9 @@ copy_libraries(){
         #  cp $src_lib $arch_llvm/sysroot/usr/lib/$arch_dst_dir
         #done
 
-        for src_lib in libatomic.a libunwind.a
-        do
-          cp $arch_llvm/lib/clang/17/lib/linux/$arch_src_dir/$src_lib $arch_llvm/sysroot/usr/lib/$arch_dst_dir
+        for src_lib in libatomic.a libunwind.a; do
+          mkdir -p $arch_llvm/sysroot/usr/lib/$arch_dst_dir/
+          cp $x86_llvm/lib/clang/$downloaded_c_ver/lib/linux/$arch_src_dir/$src_lib $arch_llvm/sysroot/usr/lib/$arch_dst_dir || true
         done
 
       fi
@@ -99,38 +94,46 @@ copy_libraries(){
   done
 }
 
-copy_rt_lib(){
-#/data/data/com.itsaky.androidide/files/usr/lib/clang/17/lib/linux/libclang_rt.builtins-i686-android.a:
-  for _arch__ in aarch64    arm    i686    riscv64    x86_64
-  do
-    cp $arch_llvm/lib/clang/17/lib/linux/libclang_rt.builtins-${_arch__}-android.a ${HOME}/../usr/lib/clang/17/lib/linux/
+copy_rt_lib() {
+  echo Copying runtime libraries
+  for _arch__ in aarch64 arm i686 riscv64 x86_64; do
+    mkdir -p ${HOME}/../usr/lib/clang/$clang_ver/lib/linux/
+    cp $x86_llvm/lib/clang/$downloaded_c_ver/lib/linux/libclang_rt.builtins-${_arch__}-android.a ${HOME}/../usr/lib/clang/$clang_ver/lib/linux/
   done
 }
 
-install_ndk(){
+determine_downloaded_c_ver() {
+  downloaded_c_ver=ls $x86_llvm/lib/clang/ | grep -o '[0-9]\+'
+  len=wc -w $downloaded_c_ver
+  if [[ len > 1 ]]; then
+    read -p "select one ($downloaded_c_ver):" downloaded_c_ver
+  fi
+}
+
+install_ndk() {
   extract_ndk $@
+  determine_downloaded_c_ver
   pkg install clang -y
+  clang_ver=$(clang --version | grep -o '[ ][0-9]\+[.]' | grep -o '[0-9]\+')
   patch_pkg clang
   patch_pkg clang++ clang
   patch_pkg ld.lld lld
+  patch_pkg llvm-objcopy llvm-objcopy
   copy_libraries
   copy_rt_lib
   patch_pkg llvm-strip
 }
 
-if [ -z "$fpath" ] ||  [ "$fpath" = "-h" ]
-then
+if [ -z "$fpath" ] || [ "$fpath" = "-h" ]; then
   help
 else
-  if [ "$fpath" = "-d" ]
-  then
+  if [ "$fpath" = "-d" ]; then
     fpath="android-ndk-arm.zip"
     download_ndk $fpath
     downloaded="true"
   fi
   install_ndk $fpath
-  if [ "$downloaded" = "true" ]
-  then
+  if [ "$downloaded" = "true" ]; then
     echo "Removing $fpath"
     rm $fpath
   fi
